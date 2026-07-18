@@ -2,6 +2,21 @@
 
 # Create your views here.
 
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView
+)
+
+from .authentication import (
+    CustomTokenObtainPairSerializer
+)
+
+
+class LoginView(TokenObtainPairView):
+
+    serializer_class = (
+        CustomTokenObtainPairSerializer
+    )
+
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 

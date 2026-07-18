@@ -2,12 +2,13 @@ from django.urls import path
 
 from .views import (
     RegisterView,
-    ProfileView
+    ProfileView,
+    VerifyEmailView,
+    LoginView
 )
 
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView
+    TokenRefreshView,
 )
 
 urlpatterns = [
@@ -30,7 +31,7 @@ urlpatterns = [
 
     path(
         "auth/login/",
-        TokenObtainPairView.as_view(),
+        LoginView.as_view(),
         name="login"
     ),
 

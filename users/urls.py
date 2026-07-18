@@ -4,7 +4,11 @@ from .views import (
     RegisterView,
     ProfileView,
     VerifyEmailView,
-    LoginView
+    LoginView,
+    LogoutView,
+    ChangePasswordView,
+    ForgotPasswordView,
+    ResetPasswordView,
 )
 
 from rest_framework_simplejwt.views import (
@@ -41,7 +45,26 @@ urlpatterns = [
         TokenRefreshView.as_view(),
         name="token_refresh"
     ),
+    
+    path(
+        "users/change-password/",
+        ChangePasswordView.as_view(),
+        name="change-password"
+    ),
 
+
+    path(
+        "auth/forgot-password/",
+        ForgotPasswordView.as_view(),
+        name="forgot-password"
+    ),
+
+
+    path(
+        "auth/reset-password/<int:uid>/<str:token>/",
+        ResetPasswordView.as_view(),
+        name="reset-password"
+    ),
 
     path(
         "users/profile/",
@@ -52,6 +75,11 @@ urlpatterns = [
         "users/profile/update/",
         ProfileView.as_view(),
         name="profile_update"
+    ),
+     path(
+        "auth/logout/",
+        LogoutView.as_view(),
+        name="logout"
     ),
 
 ]

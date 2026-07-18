@@ -2,6 +2,12 @@
 
 # Create your views here.
 
+from django.shortcuts import get_object_or_404
+from rest_framework.views import APIView
+
+from .models import User
+from .tokens import email_verification_token
+
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -48,6 +54,50 @@ class RegisterView(generics.CreateAPIView):
             },
             status=status.HTTP_201_CREATED
         )
+
+class VerifyEmailView(APIView):
+
+    permission_classes = []
+
+
+    def get(
+        self,
+        request,
+        uid,
+        token
+    ):
+
+        user = get_object_or_404(
+            User,
+            id=uid
+        )
+
+
+        if email_verification_token.check_token(
+            user,
+            token
+        ):
+
+            user.email_verified = True
+            user.save()
+
+
+            return Response(
+                {
+                    "message":
+                    "Email verified successfully"
+                }
+            )
+
+
+        return Response(
+            {
+                "error":
+                "Invalid or expired token"
+            },
+            status=400
+        )
+        
 
 class ProfileView(RetrieveUpdateAPIView):
 

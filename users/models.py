@@ -19,6 +19,9 @@ class User(AbstractUser):
         default=Role.MEMBER
     )
 
+    email_verified = models.BooleanField(
+        default=False
+    )
 
     phone_number = models.CharField(
         max_length=20,

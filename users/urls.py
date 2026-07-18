@@ -10,8 +10,6 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView
 )
 
-
-
 urlpatterns = [
 
     path(
@@ -19,7 +17,16 @@ urlpatterns = [
         RegisterView.as_view(),
         name="register"
     ),
-
+    path(
+        "auth/verify-email/<int:uid>/<str:token>/",
+        VerifyEmailView.as_view(),
+        name="verify-email"
+    ),
+    # path(
+    #     "auth/resend-verification/",
+    #     ResendVerificationView.as_view(),
+    #     name="resend_verification"
+    # ),
 
     path(
         "auth/login/",
@@ -39,6 +46,11 @@ urlpatterns = [
         "users/profile/",
         ProfileView.as_view(),
         name="profile"
+    ),
+    path(
+        "users/profile/update/",
+        ProfileView.as_view(),
+        name="profile_update"
     ),
 
 ]

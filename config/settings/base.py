@@ -147,3 +147,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
+
+# Library borrowing rules (Phases 8–9)
+LIBRARY_LOAN_DAYS = 14
+LIBRARY_FINE_PER_DAY = "1.00"  # Decimal string

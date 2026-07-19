@@ -67,7 +67,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
+    'common',
     'users',
+    'books',
+    'borrowing',
 ]
 
 MIDDLEWARE = [
@@ -113,21 +116,8 @@ DATABASES = {
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+# Disabled for local/dev API testing — re-enable before production.
+AUTH_PASSWORD_VALIDATORS = []
 
 
 # Internationalization
@@ -146,6 +136,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Media (profile images)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+MEDIA_URL = '/media/'
+MEDIA_ROOT = PROJECT_ROOT / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

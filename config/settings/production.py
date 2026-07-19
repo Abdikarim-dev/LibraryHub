@@ -48,3 +48,14 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in config(
+        "CORS_ALLOWED_ORIGINS",
+        default="https://library.com,https://www.library.com",
+    ).split(",")
+    if origin.strip()
+]
+
+STATIC_ROOT = PROJECT_ROOT / "staticfiles"

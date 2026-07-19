@@ -1,9 +1,13 @@
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.response import Response
 
+from common.pagination import StandardResultsSetPagination
 from users.models import User
 
+from .filters import BorrowRecordFilter, FineFilter
 from .models import BorrowRecord, Fine
 from .permissions import IsAdminOrLibrarian, IsStaffOrReadOwnBorrow
 from .serializers import (
@@ -22,6 +26,17 @@ class BorrowRecordViewSet(
 ):
     permission_classes = [IsStaffOrReadOwnBorrow]
     serializer_class = BorrowRecordSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = BorrowRecordFilter
+    search_fields = [
+        "book__title",
+        "book__isbn",
+        "member__username",
+        "member__email",
+    ]
+    ordering_fields = ["borrowed_at", "due_date", "status", "created_at"]
+    ordering = ["-borrowed_at"]
 
     def get_queryset(self):
         qs = BorrowRecord.objects.select_related(
@@ -70,6 +85,16 @@ class FineViewSet(
 ):
     permission_classes = [IsStaffOrReadOwnBorrow]
     serializer_class = FineSerializer
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_class = FineFilter
+    search_fields = [
+        "reason",
+        "borrow_record__book__title",
+        "borrow_record__member__username",
+    ]
+    ordering_fields = ["amount", "status", "created_at"]
+    ordering = ["-created_at"]
 
     def get_queryset(self):
         qs = Fine.objects.select_related(

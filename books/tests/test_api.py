@@ -57,7 +57,7 @@ class BooksAPITests(APITestCase):
         self._login("mem_books")
         response = self.client.get("/api/books/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(response.data), 1)
+        self.assertGreaterEqual(len(response.data["results"]), 1)
 
     def test_member_cannot_create_book(self):
         self._login("mem_books")
@@ -143,4 +143,4 @@ class BooksAPITests(APITestCase):
         self._login("mem_books")
         response = self.client.get("/api/books/?search=Things")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(response.data), 1)
+        self.assertGreaterEqual(len(response.data["results"]), 1)

@@ -23,11 +23,18 @@ def make_user(username, role, password="pass12345"):
         user.is_staff = True
         user.save(update_fields=["is_staff"])
     if role == User.Role.MEMBER:
-        MemberProfile.objects.create(
-            user=user,
-            membership_id=f"MEM-{username}",
-            max_borrow_limit=3,
-        )
+        profile = getattr(user, "member_profile", None)
+        if profile is None:
+            MemberProfile.objects.create(
+                user=user,
+                membership_id=f"MEM-{username}",
+                max_borrow_limit=3,
+            )
+        else:
+            profile.max_borrow_limit = 3
+            if not profile.membership_id:
+                profile.membership_id = f"MEM-{username}"
+            profile.save()
     return user
 
 
@@ -203,5 +210,5 @@ class BorrowReturnAPITests(APITestCase):
         self._login("mem_br")
         response = self.client.get("/api/borrows/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["member"], self.member.id)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(response.data["results"][0]["member"], self.member.id)

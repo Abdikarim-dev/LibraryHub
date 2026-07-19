@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from books.models import Author, Book, Category, Publisher
 from borrowing.models import BorrowRecord, Fine
-from users.models import MemberProfile, User
+from users.models import User
 
 
 class Phase3ModelTests(TestCase):
@@ -18,10 +18,9 @@ class Phase3ModelTests(TestCase):
             role=User.Role.MEMBER,
             email_verified=True,
         )
-        self.profile = MemberProfile.objects.create(
-            user=self.member,
-            membership_id="MEM-001",
-        )
+        self.profile = self.member.member_profile
+        self.profile.membership_id = "MEM-001"
+        self.profile.save(update_fields=["membership_id"])
         self.author = Author.objects.create(
             first_name="Jane",
             last_name="Austen",

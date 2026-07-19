@@ -49,7 +49,7 @@ class UserManagementTests(APITestCase):
         self._login("lib1")
         listing = self.client.get("/api/users/")
         self.assertEqual(listing.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(listing.data), 1)
+        self.assertGreaterEqual(len(listing.data["results"]), 1)
 
         detail = self.client.get(f"/api/users/{self.member.pk}/")
         self.assertEqual(detail.status_code, status.HTTP_200_OK)
@@ -112,7 +112,7 @@ class UserManagementTests(APITestCase):
         )
 
         listing = self.client.get("/api/users/")
-        ids = [row["id"] for row in listing.data]
+        ids = [row["id"] for row in listing.data["results"]]
         self.assertNotIn(self.other.pk, ids)
 
     def test_admin_cannot_delete_self(self):

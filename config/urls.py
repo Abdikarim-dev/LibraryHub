@@ -7,20 +7,22 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
+
+_docs_permission = AllowAny if getattr(settings, "API_DOCS_PUBLIC", False) else IsAdminUser
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(
         "api/schema/",
-        SpectacularAPIView.as_view(permission_classes=[AllowAny]),
+        SpectacularAPIView.as_view(permission_classes=[_docs_permission]),
         name="schema",
     ),
     path(
         "api/docs/",
         SpectacularSwaggerView.as_view(
             url_name="schema",
-            permission_classes=[AllowAny],
+            permission_classes=[_docs_permission],
         ),
         name="swagger-ui",
     ),
@@ -28,7 +30,7 @@ urlpatterns = [
         "api/redoc/",
         SpectacularRedocView.as_view(
             url_name="schema",
-            permission_classes=[AllowAny],
+            permission_classes=[_docs_permission],
         ),
         name="redoc",
     ),

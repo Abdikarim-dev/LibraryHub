@@ -10,7 +10,7 @@ from borrowing.models import BorrowRecord, Fine
 from users.models import MemberProfile, User
 
 
-def make_user(username, role, password="pass12345"):
+def make_user(username, role, password="Pass12345!"):
     user = User.objects.create_user(
         username=username,
         email=f"{username}@example.com",
@@ -59,7 +59,7 @@ class BorrowReturnAPITests(APITestCase):
     def _login(self, username):
         response = self.client.post(
             "/api/auth/login/",
-            {"username": username, "password": "pass12345"},
+            {"username": username, "password": "Pass12345!"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -140,9 +140,9 @@ class BorrowReturnAPITests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn("fine_created", response.data)
+        self.assertIsNotNone(response.data.get("fine"))
         self.assertEqual(
-            Decimal(response.data["fine_created"]["amount"]),
+            Decimal(response.data["fine"]["amount"]),
             Decimal("3.00"),
         )
         self.assertTrue(Fine.objects.filter(borrow_record=record).exists())
@@ -212,3 +212,150 @@ class BorrowReturnAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["member"], self.member.id)
+
+    def test_borrow_limit_enforced(self):
+        books = []
+        for i in range(4):
+            books.append(
+                Book.objects.create(
+                    title=f"Limit Book {i}",
+                    isbn=f"333333333333{i}",
+                    total_copies=1,
+                    available_copies=1,
+                )
+            )
+        self._login("mem_br")
+        for book in books[:3]:
+            response = self.client.post(
+                "/api/borrows/borrow/",
+                {"book_id": book.id},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        blocked = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": books[3].id},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("limit", str(blocked.data).lower())
+
+    def test_staff_borrow_requires_member_id(self):
+        self._login("lib_br")
+        response = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": self.book.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("member_id", response.data)
+
+    def test_member_cannot_borrow_for_another(self):
+        self._login("mem_br")
+        response = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": self.book.id, "member_id": self.other.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_member_cannot_pay_fine(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=1),
+            status=BorrowRecord.Status.RETURNED,
+            returned_at=timezone.now(),
+        )
+        fine = Fine.objects.create(
+            borrow_record=record,
+            amount=Decimal("1.00"),
+            reason="Late",
+        )
+        self._login("mem_br")
+        response = self.client.post(f"/api/fines/{fine.id}/pay/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_double_return_rejected(self):
+        self._login("mem_br")
+        borrow = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": self.book.id},
+            format="json",
+        )
+        record_id = borrow.data["id"]
+        first = self.client.post(
+            "/api/borrows/return/",
+            {"borrow_record_id": record_id},
+            format="json",
+        )
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        second = self.client.post(
+            "/api/borrows/return/",
+            {"borrow_record_id": record_id},
+            format="json",
+        )
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pending_fine_blocks_borrow(self):
+        prior = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=1),
+            status=BorrowRecord.Status.RETURNED,
+            returned_at=timezone.now(),
+        )
+        Fine.objects.create(
+            borrow_record=prior,
+            amount=Decimal("2.00"),
+            reason="Late",
+        )
+        other = Book.objects.create(
+            title="Blocked",
+            isbn="4444444444444",
+            total_copies=1,
+            available_copies=1,
+        )
+        self._login("mem_br")
+        response = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": other.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("fine", str(response.data).lower())
+
+    def test_staff_can_mark_lost(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() + timedelta(days=7),
+            status=BorrowRecord.Status.BORROWED,
+        )
+        self.book.available_copies = 1
+        self.book.save(update_fields=["available_copies"])
+        self._login("lib_br")
+        response = self.client.post(f"/api/borrows/{record.id}/mark-lost/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "LOST")
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.available_copies, 1)
+
+    def test_pay_already_paid_rejected(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=1),
+            status=BorrowRecord.Status.RETURNED,
+            returned_at=timezone.now(),
+        )
+        fine = Fine.objects.create(
+            borrow_record=record,
+            amount=Decimal("1.00"),
+            reason="Late",
+            status=Fine.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        self._login("admin_br")
+        response = self.client.post(f"/api/fines/{fine.id}/pay/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

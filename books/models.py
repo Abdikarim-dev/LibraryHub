@@ -108,6 +108,12 @@ class Book(TimeStampedModel):
             models.Index(fields=["isbn"]),
             models.Index(fields=["title"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(available_copies__lte=models.F("total_copies")),
+                name="book_available_lte_total",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.isbn})"

@@ -5,7 +5,7 @@ def make_user(
     *,
     username,
     email=None,
-    password="pass12345",
+    password="Pass12345!",
     role=User.Role.MEMBER,
     email_verified=True,
     is_active=True,
@@ -15,9 +15,9 @@ def make_user(
         username=username,
         email=email or f"{username}@example.com",
         password=password,
+        role=role,
         **extra,
     )
-    user.role = role
     user.email_verified = email_verified
     user.is_active = is_active
     if role == User.Role.ADMIN:

@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+from common.responses import message_response
 from .authentication import CustomTokenObtainPairSerializer
 from .models import User
 from .permissions import IsAdmin, IsAdminOrLibrarian
@@ -16,6 +17,7 @@ from .serializers import (
     RegisterSerializer,
     ResetPasswordSerializer,
     RoleUpdateSerializer,
+    UserLibrarianSerializer,
     UserProfileSerializer,
     UserSerializer,
     UserUpdateSerializer,
@@ -28,37 +30,39 @@ from .services import (
     update_user,
     verify_email,
 )
+from .throttles import AuthRateThrottle
 
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
 
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        return Response(
-            {
-                "message": "User created successfully",
-                "username": user.username,
-            },
-            status=status.HTTP_201_CREATED,
+        return message_response(
+            "User created successfully",
+            http_status=status.HTTP_201_CREATED,
+            username=user.username,
         )
 
 
 class VerifyEmailView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def get(self, request, uid, token):
         verify_email(uid=uid, token=token)
-        return Response({"message": "Email verified successfully"})
+        return message_response("Email verified successfully")
 
 
 class ProfileView(RetrieveUpdateAPIView):
@@ -79,12 +83,13 @@ class ChangePasswordView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"message": "Password changed successfully"})
+        return message_response("Password changed successfully")
 
 
 class ForgotPasswordView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         serializer = ForgotPasswordSerializer(
@@ -93,12 +98,13 @@ class ForgotPasswordView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"message": "Password reset email sent"})
+        return message_response("Password reset email sent")
 
 
 class ResetPasswordView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request, uid, token):
         serializer = ResetPasswordSerializer(
@@ -107,7 +113,7 @@ class ResetPasswordView(APIView):
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"message": "Password reset successfully"})
+        return message_response("Password reset successfully")
 
 
 class LogoutView(APIView):
@@ -117,10 +123,7 @@ class LogoutView(APIView):
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(
-            {"message": "Successfully logged out"},
-            status=status.HTTP_205_RESET_CONTENT,
-        )
+        return message_response("Successfully logged out")
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -139,6 +142,13 @@ class UserViewSet(viewsets.ModelViewSet):
             return UserUpdateSerializer
         if self.action == "set_role":
             return RoleUpdateSerializer
+        if self.action in ("list", "retrieve"):
+            if (
+                self.request.user.is_authenticated
+                and self.request.user.role == User.Role.ADMIN
+            ):
+                return UserSerializer
+            return UserLibrarianSerializer
         return UserSerializer
 
     def get_permissions(self):
@@ -154,6 +164,7 @@ class UserViewSet(viewsets.ModelViewSet):
             actor=request.user,
             user=user,
             validated_data=serializer.validated_data,
+            request=request,
         )
         return Response(UserSerializer(updated, context={"request": request}).data)
 

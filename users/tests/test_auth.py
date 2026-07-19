@@ -10,17 +10,18 @@ from users.tokens import email_verification_token, password_reset_token
 
 class AuthFlowTests(APITestCase):
     def test_register_sends_verification_email(self):
-        response = self.client.post(
-            "/api/auth/register/",
-            {
-                "username": "newmember",
-                "email": "newmember@example.com",
-                "password": "secret123",
-                "first_name": "New",
-                "last_name": "Member",
-            },
-            format="json",
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/auth/register/",
+                {
+                    "username": "newmember",
+                    "email": "newmember@example.com",
+                    "password": "Pass12345!",
+                    "first_name": "New",
+                    "last_name": "Member",
+                },
+                format="json",
+            )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = User.objects.get(username="newmember")
         self.assertFalse(user.email_verified)
@@ -30,12 +31,12 @@ class AuthFlowTests(APITestCase):
     def test_login_blocked_until_email_verified(self):
         make_user(
             username="unverified",
-            password="secret123",
+            password="Pass12345!",
             email_verified=False,
         )
         response = self.client.post(
             "/api/auth/login/",
-            {"username": "unverified", "password": "secret123"},
+            {"username": "unverified", "password": "Pass12345!"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
@@ -44,7 +45,7 @@ class AuthFlowTests(APITestCase):
     def test_verify_email_then_login(self):
         user = make_user(
             username="verifyme",
-            password="secret123",
+            password="Pass12345!",
             email_verified=False,
         )
         token = email_verification_token.make_token(user)
@@ -58,7 +59,7 @@ class AuthFlowTests(APITestCase):
 
         login = self.client.post(
             "/api/auth/login/",
-            {"username": "verifyme", "password": "secret123"},
+            {"username": "verifyme", "password": "Pass12345!"},
             format="json",
         )
         self.assertEqual(login.status_code, status.HTTP_200_OK)
@@ -68,7 +69,7 @@ class AuthFlowTests(APITestCase):
     def test_verify_email_strips_soft_break_equals(self):
         user = make_user(
             username="qpuser",
-            password="secret123",
+            password="Pass12345!",
             email_verified=False,
         )
         token = email_verification_token.make_token(user)
@@ -82,10 +83,10 @@ class AuthFlowTests(APITestCase):
         self.assertTrue(user.email_verified)
 
     def test_token_refresh_and_logout_blacklist(self):
-        user = make_user(username="tokener", password="secret123")
+        user = make_user(username="tokener", password="Pass12345!")
         login = self.client.post(
             "/api/auth/login/",
-            {"username": "tokener", "password": "secret123"},
+            {"username": "tokener", "password": "Pass12345!"},
             format="json",
         )
         access = login.data["access"]
@@ -111,7 +112,7 @@ class AuthFlowTests(APITestCase):
         # Login again for a clean pair, then logout
         login2 = self.client.post(
             "/api/auth/login/",
-            {"username": "tokener", "password": "secret123"},
+            {"username": "tokener", "password": "Pass12345!"},
             format="json",
         )
         self.client.credentials(
@@ -122,7 +123,8 @@ class AuthFlowTests(APITestCase):
             {"refresh": login2.data["refresh"]},
             format="json",
         )
-        self.assertEqual(logout.status_code, status.HTTP_205_RESET_CONTENT)
+        self.assertEqual(logout.status_code, status.HTTP_200_OK)
+        self.assertEqual(logout.data["detail"], "Successfully logged out")
 
         blocked = self.client.post(
             "/api/auth/token/refresh/",
@@ -132,7 +134,7 @@ class AuthFlowTests(APITestCase):
         self.assertEqual(blocked.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_forgot_and_reset_password(self):
-        user = make_user(username="resetter", password="oldpass")
+        user = make_user(username="resetter", password="OldPass123!")
         forgot = self.client.post(
             "/api/auth/forgot-password/",
             {"email": user.email},
@@ -144,33 +146,33 @@ class AuthFlowTests(APITestCase):
         token = password_reset_token.make_token(user)
         reset = self.client.post(
             f"/api/auth/reset-password/{user.pk}/{token}/",
-            {"password": "newpass99"},
+            {"password": "NewPass99!"},
             format="json",
         )
         self.assertEqual(reset.status_code, status.HTTP_200_OK)
 
         login_old = self.client.post(
             "/api/auth/login/",
-            {"username": "resetter", "password": "oldpass"},
+            {"username": "resetter", "password": "OldPass123!"},
             format="json",
         )
         self.assertEqual(login_old.status_code, status.HTTP_401_UNAUTHORIZED)
 
         login_new = self.client.post(
             "/api/auth/login/",
-            {"username": "resetter", "password": "newpass99"},
+            {"username": "resetter", "password": "NewPass99!"},
             format="json",
         )
         self.assertEqual(login_new.status_code, status.HTTP_200_OK)
 
     def test_expired_jwt_ignored_on_public_reset_endpoint(self):
-        user = make_user(username="publicreset", password="oldpass")
+        user = make_user(username="publicreset", password="OldPass123!")
         token = password_reset_token.make_token(user)
         # Expired/junk access token must not block public endpoint
         self.client.credentials(HTTP_AUTHORIZATION="Bearer not.a.valid.jwt")
         response = self.client.post(
             f"/api/auth/reset-password/{user.pk}/{token}/",
-            {"password": "brandnew1"},
+            {"password": "BrandNew99!"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)

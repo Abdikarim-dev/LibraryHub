@@ -8,13 +8,13 @@ class ProfileTests(APITestCase):
     def setUp(self):
         self.user = make_user(
             username="member1",
-            password="secret123",
+            password="Pass12345!",
             first_name="Mem",
             last_name="Ber",
         )
         login = self.client.post(
             "/api/auth/login/",
-            {"username": "member1", "password": "secret123"},
+            {"username": "member1", "password": "Pass12345!"},
             format="json",
         )
         self.client.credentials(
@@ -43,8 +43,8 @@ class ProfileTests(APITestCase):
         response = self.client.post(
             "/api/users/change-password/",
             {
-                "old_password": "secret123",
-                "new_password": "newerpass1",
+                "old_password": "Pass12345!",
+                "new_password": "NewerPass1!",
             },
             format="json",
         )
@@ -53,14 +53,14 @@ class ProfileTests(APITestCase):
         self.client.credentials()
         old_login = self.client.post(
             "/api/auth/login/",
-            {"username": "member1", "password": "secret123"},
+            {"username": "member1", "password": "Pass12345!"},
             format="json",
         )
         self.assertEqual(old_login.status_code, status.HTTP_401_UNAUTHORIZED)
 
         new_login = self.client.post(
             "/api/auth/login/",
-            {"username": "member1", "password": "newerpass1"},
+            {"username": "member1", "password": "NewerPass1!"},
             format="json",
         )
         self.assertEqual(new_login.status_code, status.HTTP_200_OK)

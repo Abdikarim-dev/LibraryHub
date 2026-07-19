@@ -15,6 +15,9 @@ class BorrowRecord(TimeStampedModel):
         OVERDUE = "OVERDUE", "Overdue"
         LOST = "LOST", "Lost"
 
+    # Non-returned statuses that occupy a copy / count toward borrow limits
+    ACTIVE_STATUSES = (Status.BORROWED, Status.OVERDUE, Status.LOST)
+
     member = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -45,7 +48,9 @@ class BorrowRecord(TimeStampedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["member", "book"],
-                condition=models.Q(status="BORROWED"),
+                condition=models.Q(
+                    status__in=["BORROWED", "OVERDUE", "LOST"]
+                ),
                 name="unique_active_borrow_per_member_book",
             )
         ]
@@ -55,8 +60,10 @@ class BorrowRecord(TimeStampedModel):
 
     @property
     def is_overdue(self):
-        if self.status == self.Status.RETURNED:
+        if self.status in (self.Status.RETURNED, self.Status.LOST):
             return False
+        if self.status == self.Status.OVERDUE:
+            return True
         return self.due_date < timezone.localdate()
 
 

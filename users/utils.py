@@ -20,7 +20,10 @@ def _from_email():
 def _absolute_url(request, path):
     if request is not None:
         return request.build_absolute_uri(path)
-    return f"http://127.0.0.1:8000{path}"
+    base = getattr(settings, "PUBLIC_BASE_URL", "http://127.0.0.1:8000").rstrip(
+        "/"
+    )
+    return f"{base}{path}"
 
 
 def send_verification_email(user, request):

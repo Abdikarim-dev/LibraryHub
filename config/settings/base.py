@@ -5,11 +5,15 @@ Django settings for config project.
 from datetime import timedelta
 from pathlib import Path
 
-# Build paths: config/settings/base.py → project root is parents[2]
+from decouple import config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = "django-insecure-%%^49#d&*(+u2e2s10hsl+@$6juwbt49xno@e8e$@#k=rmiw)r"
+SECRET_KEY = config(
+    "SECRET_KEY",
+    default="django-insecure-dev-only-change-me-in-production",
+)
 
 DEBUG = True
 
@@ -30,6 +34,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "common.pagination.StandardResultsSetPagination",
     "PAGE_SIZE": 10,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "common.exceptions.api_exception_handler",
+    "DEFAULT_THROTTLE_CLASSES": (
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "120/hour",
+        "user": "1000/hour",
+        "auth": "30/minute",
+    },
 }
 
 SIMPLE_JWT = {
@@ -61,7 +75,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "common",
     "users.apps.UsersConfig",
-    "books",
+    "books.apps.BooksConfig",
     "borrowing.apps.BorrowingConfig",
 ]
 
@@ -102,7 +116,33 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = []
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "UserAttributeSimilarityValidator"
+        ),
+    },
+    {
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "MinimumLengthValidator"
+        ),
+        "OPTIONS": {"min_length": 8},
+    },
+    {
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "CommonPasswordValidator"
+        ),
+    },
+    {
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "NumericPasswordValidator"
+        ),
+    },
+]
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
@@ -120,13 +160,22 @@ AUTH_USER_MODEL = "users.User"
 
 LIBRARY_LOAN_DAYS = 14
 LIBRARY_FINE_PER_DAY = "1.00"
+# Block new borrows while the member has unpaid fines
+LIBRARY_BLOCK_BORROW_ON_PENDING_FINES = True
 
-# CORS (override in env-specific settings)
+MAX_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024  # 2 MB
+
+# Used when building absolute links without an HTTP request (e.g. admin email change)
+PUBLIC_BASE_URL = config("PUBLIC_BASE_URL", default="http://127.0.0.1:8000")
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# Public API docs in development only (production overrides)
+API_DOCS_PUBLIC = True
 
 LOGGING = {
     "version": 1,

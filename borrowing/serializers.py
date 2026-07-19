@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import BorrowRecord, Fine
-from .services import borrow_book, mark_fine_paid, return_book
+from .services import borrow_book, mark_borrow_lost, mark_fine_paid, return_book
 
 
 class FineSerializer(serializers.ModelSerializer):
@@ -76,6 +76,16 @@ class ReturnBookSerializer(serializers.Serializer):
         )
         self.fine = fine
         return record
+
+
+class MarkLostSerializer(serializers.Serializer):
+    def save(self, **kwargs):
+        request = self.context["request"]
+        record = self.context["borrow_record"]
+        return mark_borrow_lost(
+            actor=request.user,
+            borrow_record_id=record.pk,
+        )
 
 
 class FinePaySerializer(serializers.Serializer):

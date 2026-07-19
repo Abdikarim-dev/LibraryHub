@@ -1,6 +1,8 @@
+from django.conf import settings
 from rest_framework import serializers
 
 from .models import Author, Book, Category, Publisher
+from .services import create_book, update_book
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -50,6 +52,16 @@ class CategorySerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "slug", "created_at", "updated_at"]
+
+    def validate_name(self, value):
+        qs = Category.objects.filter(name__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                "A category with this name already exists."
+            )
+        return value
 
 
 class BookListSerializer(serializers.ModelSerializer):
@@ -108,6 +120,7 @@ class BookSerializer(serializers.ModelSerializer):
         required=False,
     )
     is_available = serializers.BooleanField(read_only=True)
+    cover_image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Book
@@ -132,45 +145,43 @@ class BookSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-    def validate(self, attrs):
-        total = attrs.get(
-            "total_copies",
-            getattr(self.instance, "total_copies", None),
-        )
-        available = attrs.get(
+        read_only_fields = [
+            "id",
             "available_copies",
-            getattr(self.instance, "available_copies", None),
-        )
-        if total is not None and available is not None and available > total:
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_cover_image(self, value):
+        if value is None:
+            return value
+        max_size = getattr(settings, "MAX_UPLOAD_SIZE_BYTES", 2 * 1024 * 1024)
+        if value.size > max_size:
             raise serializers.ValidationError(
-                {
-                    "available_copies": (
-                        "available_copies cannot exceed total_copies."
-                    )
-                }
+                f"Image too large. Max size is {max_size} bytes."
             )
-        return attrs
+        try:
+            from PIL import Image
+
+            image = Image.open(value)
+            fmt = (image.format or "").upper()
+            image.verify()
+        except Exception as exc:
+            raise serializers.ValidationError(
+                "Invalid image file."
+            ) from exc
+        finally:
+            if hasattr(value, "seek"):
+                value.seek(0)
+
+        if fmt not in {"JPEG", "PNG", "WEBP", "GIF"}:
+            raise serializers.ValidationError(
+                "Unsupported image type. Use JPEG, PNG, WEBP, or GIF."
+            )
+        return value
 
     def create(self, validated_data):
-        authors = validated_data.pop("authors", [])
-        categories = validated_data.pop("categories", [])
-        book = Book.objects.create(**validated_data)
-        if authors:
-            book.authors.set(authors)
-        if categories:
-            book.categories.set(categories)
-        return book
+        return create_book(validated_data=validated_data)
 
     def update(self, instance, validated_data):
-        authors = validated_data.pop("authors", None)
-        categories = validated_data.pop("categories", None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        if authors is not None:
-            instance.authors.set(authors)
-        if categories is not None:
-            instance.categories.set(categories)
-        return instance
+        return update_book(book=instance, validated_data=validated_data)

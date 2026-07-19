@@ -9,26 +9,26 @@ class UserManagementTests(APITestCase):
     def setUp(self):
         self.admin = make_user(
             username="admin1",
-            password="secret123",
+            password="Pass12345!",
             role=User.Role.ADMIN,
         )
         self.librarian = make_user(
             username="lib1",
-            password="secret123",
+            password="Pass12345!",
             role=User.Role.LIBRARIAN,
         )
         self.member = make_user(
             username="mem1",
-            password="secret123",
+            password="Pass12345!",
             role=User.Role.MEMBER,
         )
         self.other = make_user(
             username="mem2",
-            password="secret123",
+            password="Pass12345!",
             role=User.Role.MEMBER,
         )
 
-    def _login(self, username, password="secret123"):
+    def _login(self, username, password="Pass12345!"):
         response = self.client.post(
             "/api/auth/login/",
             {"username": username, "password": password},
@@ -130,3 +130,44 @@ class UserManagementTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.admin.refresh_from_db()
         self.assertEqual(self.admin.role, User.Role.ADMIN)
+
+    def test_cannot_deactivate_last_admin(self):
+        self._login("admin1")
+        response = self.client.patch(
+            f"/api/users/{self.admin.pk}/deactivate/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_librarian_list_hides_sensitive_fields(self):
+        self._login("lib1")
+        detail = self.client.get(f"/api/users/{self.member.pk}/")
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertNotIn("phone_number", detail.data)
+        self.assertNotIn("deleted_at", detail.data)
+
+    def test_librarian_cannot_patch_user(self):
+        self._login("lib1")
+        response = self.client.patch(
+            f"/api/users/{self.member.pk}/",
+            {"first_name": "Nope"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_deactivate_blacklists_refresh(self):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        refresh = str(RefreshToken.for_user(self.other))
+        self._login("admin1")
+        response = self.client.patch(
+            f"/api/users/{self.other.pk}/deactivate/"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        blocked = self.client.post(
+            "/api/auth/token/refresh/",
+            {"refresh": refresh},
+            format="json",
+        )
+        self.assertEqual(blocked.status_code, status.HTTP_401_UNAUTHORIZED)

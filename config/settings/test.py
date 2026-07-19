@@ -25,5 +25,18 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
 
+# Avoid throttling noise in the test suite
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    "DEFAULT_THROTTLE_CLASSES": (),
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "10000/hour",
+        "user": "10000/hour",
+        "auth": "10000/minute",
+    },
+}
+
+PUBLIC_BASE_URL = "http://testserver"
+
 # Avoid optional apps that may be missing in CI
 INSTALLED_APPS = [app for app in INSTALLED_APPS if app != "django_extensions"]

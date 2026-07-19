@@ -11,7 +11,7 @@ class MembershipSignalTests(APITestCase):
             {
                 "username": "signaluser",
                 "email": "signaluser@example.com",
-                "password": "secret123",
+                "password": "Pass12345!",
                 "first_name": "Sig",
                 "last_name": "Nal",
             },

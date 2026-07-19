@@ -5,7 +5,7 @@ from books.models import Author, Book, Category, Publisher
 from users.models import User
 
 
-def make_user(username, role, password="pass12345"):
+def make_user(username, role, password="Pass12345!"):
     user = User.objects.create_user(
         username=username,
         email=f"{username}@example.com",
@@ -45,7 +45,7 @@ class BooksAPITests(APITestCase):
     def _login(self, username):
         response = self.client.post(
             "/api/auth/login/",
-            {"username": username, "password": "pass12345"},
+            {"username": username, "password": "Pass12345!"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -93,20 +93,22 @@ class BooksAPITests(APITestCase):
         self.assertEqual(len(response.data["authors_detail"]), 1)
         self.assertTrue(response.data["is_available"])
 
-    def test_available_copies_cannot_exceed_total(self):
+    def test_available_copies_is_system_managed(self):
         self._login("admin_books")
         response = self.client.post(
             "/api/books/",
             {
-                "title": "Bad Stock",
+                "title": "Stock Managed",
                 "isbn": "9999999999999",
                 "total_copies": 1,
                 "available_copies": 5,
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("available_copies", response.data)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Client cannot inflate availability; seeded from total_copies
+        self.assertEqual(response.data["available_copies"], 1)
+        self.assertEqual(response.data["total_copies"], 1)
 
     def test_author_publisher_category_crud_permissions(self):
         self._login("lib_books")
@@ -144,3 +146,44 @@ class BooksAPITests(APITestCase):
         response = self.client.get("/api/books/?search=Things")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data["results"]), 1)
+
+    def test_cannot_reduce_total_below_active_loans(self):
+        from borrowing.models import BorrowRecord
+
+        BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date="2099-01-01",
+            status="BORROWED",
+        )
+        self.book.available_copies = 4
+        self.book.save(update_fields=["available_copies"])
+        self._login("admin_books")
+        response = self.client.patch(
+            f"/api/books/{self.book.id}/",
+            {"total_copies": 0},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("total_copies", response.data)
+
+    def test_update_total_recomputes_available_from_loans(self):
+        from borrowing.models import BorrowRecord
+
+        BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date="2099-01-01",
+            status="BORROWED",
+        )
+        self.book.available_copies = 4
+        self.book.save(update_fields=["available_copies"])
+        self._login("admin_books")
+        response = self.client.patch(
+            f"/api/books/{self.book.id}/",
+            {"total_copies": 3},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["total_copies"], 3)
+        self.assertEqual(response.data["available_copies"], 2)

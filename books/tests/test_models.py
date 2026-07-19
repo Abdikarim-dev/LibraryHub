@@ -14,7 +14,7 @@ class Phase3ModelTests(TestCase):
         self.member = User.objects.create_user(
             username="borrower",
             email="borrower@example.com",
-            password="pass12345",
+            password="Pass12345!",
             role=User.Role.MEMBER,
             email_verified=True,
         )

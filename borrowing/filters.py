@@ -1,6 +1,8 @@
 import django_filters
+from django.utils import timezone
 
 from .models import BorrowRecord, Fine
+from .services import overdue_q
 
 
 class BorrowRecordFilter(django_filters.FilterSet):
@@ -29,19 +31,11 @@ class BorrowRecordFilter(django_filters.FilterSet):
         ]
 
     def filter_overdue(self, queryset, name, value):
-        from django.utils import timezone
-
-        today = timezone.localdate()
+        overdue = overdue_q(timezone.localdate())
         if value is True:
-            return queryset.filter(
-                status=BorrowRecord.Status.BORROWED,
-                due_date__lt=today,
-            )
+            return queryset.filter(overdue)
         if value is False:
-            return queryset.exclude(
-                status=BorrowRecord.Status.BORROWED,
-                due_date__lt=today,
-            )
+            return queryset.exclude(overdue)
         return queryset
 
 

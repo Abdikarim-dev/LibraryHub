@@ -359,3 +359,160 @@ class BorrowReturnAPITests(APITestCase):
         self._login("admin_br")
         response = self.client.post(f"/api/fines/{fine.id}/pay/")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_promotes_past_due_to_overdue_status(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=2),
+            status=BorrowRecord.Status.BORROWED,
+        )
+        self._login("mem_br")
+        response = self.client.get("/api/borrows/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        row = response.data["results"][0]
+        self.assertEqual(row["id"], record.id)
+        self.assertEqual(row["status"], "OVERDUE")
+        self.assertTrue(row["is_overdue"])
+        record.refresh_from_db()
+        self.assertEqual(record.status, BorrowRecord.Status.OVERDUE)
+
+    def test_overdue_filter_includes_synced_overdue(self):
+        BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=1),
+            status=BorrowRecord.Status.BORROWED,
+        )
+        on_time = Book.objects.create(
+            title="On Time",
+            isbn="5555555555555",
+            total_copies=1,
+            available_copies=0,
+        )
+        BorrowRecord.objects.create(
+            member=self.member,
+            book=on_time,
+            due_date=timezone.localdate() + timedelta(days=5),
+            status=BorrowRecord.Status.BORROWED,
+        )
+        self._login("mem_br")
+        overdue = self.client.get("/api/borrows/?overdue=true")
+        self.assertEqual(overdue.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(overdue.data["results"]), 1)
+        self.assertEqual(overdue.data["results"][0]["status"], "OVERDUE")
+
+        not_overdue = self.client.get("/api/borrows/?overdue=false")
+        self.assertEqual(not_overdue.status_code, status.HTTP_200_OK)
+        statuses = {row["status"] for row in not_overdue.data["results"]}
+        self.assertNotIn("OVERDUE", statuses)
+
+    def test_lost_does_not_consume_borrow_limit(self):
+        """LOST frees the limit slot; unique title remains blocked until resolve."""
+        books = []
+        for i in range(4):
+            books.append(
+                Book.objects.create(
+                    title=f"Limit Lost {i}",
+                    isbn=f"666666666666{i}",
+                    total_copies=1,
+                    available_copies=1,
+                )
+            )
+        # Fill limit with 3 open loans, mark one lost → slot frees
+        self._login("mem_br")
+        ids = []
+        for book in books[:3]:
+            response = self.client.post(
+                "/api/borrows/borrow/",
+                {"book_id": book.id},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            ids.append(response.data["id"])
+
+        self._login("lib_br")
+        lost = self.client.post(f"/api/borrows/{ids[0]}/mark-lost/")
+        self.assertEqual(lost.status_code, status.HTTP_200_OK)
+
+        self._login("mem_br")
+        # 2 open + 1 lost → can borrow a 3rd open loan (limit 3)
+        fourth = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": books[3].id},
+            format="json",
+        )
+        self.assertEqual(fourth.status_code, status.HTTP_201_CREATED)
+
+        # Same lost title still blocked
+        blocked_same = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": books[0].id},
+            format="json",
+        )
+        self.assertEqual(blocked_same.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_resolve_lost_writeoff_and_restore(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() + timedelta(days=7),
+            status=BorrowRecord.Status.LOST,
+        )
+        self.book.available_copies = 1
+        self.book.save(update_fields=["available_copies"])
+
+        self._login("lib_br")
+        writeoff = self.client.post(
+            f"/api/borrows/{record.id}/resolve-lost/",
+            {"restore_inventory": False},
+            format="json",
+        )
+        self.assertEqual(writeoff.status_code, status.HTTP_200_OK)
+        self.assertEqual(writeoff.data["status"], "RETURNED")
+        self.book.refresh_from_db()
+        self.assertEqual(self.book.available_copies, 1)
+
+        # Can borrow that title again after resolve
+        self._login("mem_br")
+        again = self.client.post(
+            "/api/borrows/borrow/",
+            {"book_id": self.book.id},
+            format="json",
+        )
+        self.assertEqual(again.status_code, status.HTTP_201_CREATED)
+
+        # Mark lost again then restore inventory
+        self._login("lib_br")
+        self.client.post(f"/api/borrows/{again.data['id']}/mark-lost/")
+        self.book.refresh_from_db()
+        available_before_restore = self.book.available_copies
+        restored = self.client.post(
+            f"/api/borrows/{again.data['id']}/resolve-lost/",
+            {"restore_inventory": True},
+            format="json",
+        )
+        self.assertEqual(restored.status_code, status.HTTP_200_OK)
+        self.book.refresh_from_db()
+        self.assertEqual(
+            self.book.available_copies,
+            available_before_restore + 1,
+        )
+
+    def test_waived_fine_cannot_be_paid(self):
+        record = BorrowRecord.objects.create(
+            member=self.member,
+            book=self.book,
+            due_date=timezone.localdate() - timedelta(days=1),
+            status=BorrowRecord.Status.RETURNED,
+            returned_at=timezone.now(),
+        )
+        fine = Fine.objects.create(
+            borrow_record=record,
+            amount=Decimal("1.00"),
+            reason="Late",
+            status=Fine.Status.WAIVED,
+        )
+        self._login("admin_br")
+        response = self.client.post(f"/api/fines/{fine.id}/pay/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

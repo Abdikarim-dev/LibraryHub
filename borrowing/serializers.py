@@ -1,7 +1,13 @@
 from rest_framework import serializers
 
 from .models import BorrowRecord, Fine
-from .services import borrow_book, mark_borrow_lost, mark_fine_paid, return_book
+from .services import (
+    borrow_book,
+    mark_borrow_lost,
+    mark_fine_paid,
+    resolve_lost,
+    return_book,
+)
 
 
 class FineSerializer(serializers.ModelSerializer):
@@ -85,6 +91,21 @@ class MarkLostSerializer(serializers.Serializer):
         return mark_borrow_lost(
             actor=request.user,
             borrow_record_id=record.pk,
+        )
+
+
+class ResolveLostSerializer(serializers.Serializer):
+    restore_inventory = serializers.BooleanField(default=False)
+
+    def save(self, **kwargs):
+        request = self.context["request"]
+        record = self.context["borrow_record"]
+        return resolve_lost(
+            actor=request.user,
+            borrow_record_id=record.pk,
+            restore_inventory=self.validated_data.get(
+                "restore_inventory", False
+            ),
         )
 
 

@@ -15,7 +15,11 @@ class BorrowRecord(TimeStampedModel):
         OVERDUE = "OVERDUE", "Overdue"
         LOST = "LOST", "Lost"
 
-    # Non-returned statuses that occupy a copy / count toward borrow limits
+    # Still out with the member — count toward max_borrow_limit
+    OPEN_LOAN_STATUSES = (Status.BORROWED, Status.OVERDUE)
+
+    # Occupy a physical copy (and unique member+book slot) until closed
+    # LOST: copy write-off until staff resolve-lost; does NOT count toward limit
     ACTIVE_STATUSES = (Status.BORROWED, Status.OVERDUE, Status.LOST)
 
     member = models.ForeignKey(

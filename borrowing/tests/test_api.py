@@ -372,10 +372,20 @@ class BorrowReturnAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         row = response.data["results"][0]
         self.assertEqual(row["id"], record.id)
+        # API shows effective OVERDUE without write-on-read
         self.assertEqual(row["status"], "OVERDUE")
         self.assertTrue(row["is_overdue"])
-        record.refresh_from_db()
-        self.assertEqual(record.status, BorrowRecord.Status.OVERDUE)
+
+    def test_member_cannot_retrieve_others_borrow(self):
+        record = BorrowRecord.objects.create(
+            member=self.other,
+            book=self.book,
+            due_date=timezone.localdate() + timedelta(days=7),
+            status=BorrowRecord.Status.BORROWED,
+        )
+        self._login("mem_br")
+        response = self.client.get(f"/api/borrows/{record.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_overdue_filter_includes_synced_overdue(self):
         BorrowRecord.objects.create(

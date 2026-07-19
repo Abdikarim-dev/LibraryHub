@@ -9,9 +9,12 @@ from drf_spectacular.views import (
 )
 from rest_framework.permissions import AllowAny, IsAdminUser
 
+from common.views import HealthCheckView
+
 _docs_permission = AllowAny if getattr(settings, "API_DOCS_PUBLIC", False) else IsAdminUser
 
 urlpatterns = [
+    path("health/", HealthCheckView.as_view(), name="health"),
     path("admin/", admin.site.urls),
     path(
         "api/schema/",

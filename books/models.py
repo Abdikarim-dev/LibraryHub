@@ -105,7 +105,6 @@ class Book(TimeStampedModel):
     class Meta:
         ordering = ["title"]
         indexes = [
-            models.Index(fields=["isbn"]),
             models.Index(fields=["title"]),
         ]
         constraints = [

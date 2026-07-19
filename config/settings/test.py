@@ -38,5 +38,16 @@ REST_FRAMEWORK = {
 
 PUBLIC_BASE_URL = "http://testserver"
 
+# Console-only logging in tests (no rotating file noise)
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "WARNING"},
+}
+
+# Skip WhiteNoise static lookup noise in tests
+MIDDLEWARE = [m for m in MIDDLEWARE if "whitenoise" not in m]
+
 # Avoid optional apps that may be missing in CI
 INSTALLED_APPS = [app for app in INSTALLED_APPS if app != "django_extensions"]

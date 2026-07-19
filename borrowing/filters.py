@@ -6,7 +6,7 @@ from .services import overdue_q
 
 
 class BorrowRecordFilter(django_filters.FilterSet):
-    status = django_filters.CharFilter(lookup_expr="iexact")
+    status = django_filters.CharFilter(method="filter_status")
     member = django_filters.NumberFilter(field_name="member_id")
     book = django_filters.NumberFilter(field_name="book_id")
     due_before = django_filters.DateFilter(
@@ -29,6 +29,15 @@ class BorrowRecordFilter(django_filters.FilterSet):
             "due_after",
             "overdue",
         ]
+
+    def filter_status(self, queryset, name, value):
+        if not value:
+            return queryset
+        value = value.upper()
+        # Treat OVERDUE as effective status (includes past-due BORROWED)
+        if value == BorrowRecord.Status.OVERDUE:
+            return queryset.filter(overdue_q())
+        return queryset.filter(status__iexact=value)
 
     def filter_overdue(self, queryset, name, value):
         overdue = overdue_q(timezone.localdate())

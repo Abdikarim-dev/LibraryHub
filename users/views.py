@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django.shortcuts import get_object_or_404
 
 from common.responses import message_response
 from .authentication import CustomTokenObtainPairSerializer
@@ -25,6 +26,7 @@ from .serializers import (
 from .services import (
     activate_user,
     deactivate_user,
+    restore_user,
     set_user_role,
     soft_delete_user,
     update_user,
@@ -189,6 +191,13 @@ class UserViewSet(viewsets.ModelViewSet):
     def activate(self, request, pk=None):
         user = self.get_object()
         updated = activate_user(actor=request.user, user=user)
+        return Response(UserSerializer(updated, context={"request": request}).data)
+
+    @action(detail=True, methods=["patch"], url_path="restore")
+    def restore(self, request, pk=None):
+        # Soft-deleted users are hidden from default manager
+        user = get_object_or_404(User.all_objects, pk=pk)
+        updated = restore_user(actor=request.user, user=user)
         return Response(UserSerializer(updated, context={"request": request}).data)
 
     @action(detail=True, methods=["patch"], url_path="deactivate")

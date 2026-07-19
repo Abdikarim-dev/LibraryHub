@@ -32,6 +32,7 @@ class BorrowRecordSerializer(serializers.ModelSerializer):
         source="member.username",
         read_only=True,
     )
+    status = serializers.CharField(source="display_status", read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
     fine = FineSerializer(read_only=True)
 
@@ -72,13 +73,28 @@ class BorrowCreateSerializer(serializers.Serializer):
 
 
 class ReturnBookSerializer(serializers.Serializer):
-    borrow_record_id = serializers.IntegerField()
+    """Body optional when returning via /borrows/{id}/return/."""
+
+    borrow_record_id = serializers.IntegerField(required=False)
+
+    def validate(self, attrs):
+        if (
+            "borrow_record" not in self.context
+            and attrs.get("borrow_record_id") is None
+        ):
+            raise serializers.ValidationError(
+                {"borrow_record_id": ["This field is required."]}
+            )
+        return attrs
 
     def save(self, **kwargs):
         request = self.context["request"]
+        record_id = self.validated_data.get("borrow_record_id")
+        if record_id is None:
+            record_id = self.context["borrow_record"].pk
         record, fine = return_book(
             actor=request.user,
-            borrow_record_id=self.validated_data["borrow_record_id"],
+            borrow_record_id=record_id,
         )
         self.fine = fine
         return record

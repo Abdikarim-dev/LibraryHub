@@ -36,6 +36,7 @@ class User(AbstractUser):
         max_length=20,
         choices=Role.choices,
         default=Role.MEMBER,
+        db_index=True,
     )
 
     email_verified = models.BooleanField(
@@ -72,6 +73,10 @@ class User(AbstractUser):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["deleted_at"]),
+            models.Index(fields=["role", "is_active"]),
+        ]
 
     def __str__(self):
         return self.username

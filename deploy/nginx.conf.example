@@ -1,0 +1,42 @@
+# Example Nginx reverse proxy in front of Gunicorn (Library Hub)
+#
+# upstream points at the Docker/web service or local gunicorn on :8000.
+# Place TLS certificates and adjust server_name.
+
+upstream library_hub {
+    server 127.0.0.1:8000;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name library.com www.library.com;
+
+    # ssl_certificate     /etc/letsencrypt/live/library.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/library.com/privkey.pem;
+
+    client_max_body_size 10M;
+
+    location /media/ {
+        alias /var/www/library_hub/media/;
+    }
+
+    # Static is usually served by WhiteNoise from the app;
+    # uncomment if you prefer Nginx for staticfiles:
+    # location /static/ {
+    #     alias /var/www/library_hub/staticfiles/;
+    # }
+
+    location / {
+        proxy_pass http://library_hub;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name library.com www.library.com;
+    return 301 https://$host$request_uri;
+}

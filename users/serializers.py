@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from common.image_validation import validate_uploaded_image
 from common.validators import validate_user_password
 from .models import User
 from .services import (
@@ -82,6 +83,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_profile_image_url(self, obj):
         return _resolve_profile_image(obj, self.context.get("request"))
+
+    def validate_profile_image(self, value):
+        return validate_uploaded_image(value)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -167,6 +171,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             "phone_number",
             "profile_image",
         ]
+
+    def validate_profile_image(self, value):
+        return validate_uploaded_image(value)
 
 
 class RoleUpdateSerializer(serializers.Serializer):

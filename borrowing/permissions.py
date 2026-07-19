@@ -1,6 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 from users.models import User
+from users.permissions import IsAdminOrLibrarian  # noqa: F401 — re-export
 
 
 class IsStaffOrReadOwnBorrow(BasePermission):
@@ -18,12 +19,3 @@ class IsStaffOrReadOwnBorrow(BasePermission):
         if hasattr(obj, "borrow_record"):
             return obj.borrow_record.member_id == user.pk
         return False
-
-
-class IsAdminOrLibrarian(BasePermission):
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated
-            and request.user.role
-            in (User.Role.ADMIN, User.Role.LIBRARIAN)
-        )

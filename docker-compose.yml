@@ -2,32 +2,50 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: library_hub
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${DB_NAME:-library_hub}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-library_hub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   web:
     build: .
     command: >
-      sh -c "python manage.py migrate &&
-             gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application
+             --bind 0.0.0.0:8000
+             --workers 3
+             --timeout 60"
     env_file:
       - .env
     environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
       DJANGO_SETTINGS_ENV: production
       DB_HOST: db
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
       - media_data:/app/media
+      - static_data:/app/staticfiles
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data:
   media_data:
+  static_data:
